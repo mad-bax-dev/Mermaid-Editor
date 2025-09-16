@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mermaid Editor - Flowchart</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --muted: #94a3b8;
+        --text: #e5e7eb;
+        --accent: #22c55e;
+        --danger: #ef4444;
+        --border: #243041;
+      }
+      /* ---------- Chatbox ---------- */
+      .chatbox {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        width: 360px;
+        max-height: 70vh;
+        display: none;
+        flex-direction: column;
+        background: #0b1220;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        z-index: 20;
+      }
+      .chatbox.open {
+        display: flex;
+      }
+      .chatbox .cb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.35);
+        font-size: 13px;
+        color: #cbd5e1;
+      }
+      .chatbox .cb-status {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-inline-start: 8px;
+      }
+      .chatbox .cb-body {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow: auto;
+      }
+      .chatbox .msg {
+        background: #0b1220;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 13px;
+        color: #e5e7eb;
+        white-space: pre-wrap;
+      }
+      .chatbox .msg.user {
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+      .chatbox .msg.assistant {
+        border-color: #2f3f59;
+      }
+      .chatbox .cb-footer {
+        border-top: 1px solid var(--border);
+        padding: 8px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      .chatbox input[type="text"],
+      .chatbox input[type="password"] {
+        width: 100%;
+        background: #0b1220;
+        color: #e2e8f0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        outline: none;
+      }
+      .chatbox .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .chatbox .cb-key {
+        padding: 8px;
+        border-top: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.25);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .app {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: 100%;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1px 12px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(17, 24, 39, 0.6);
+        backdrop-filter: blur(6px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        min-height: 40px;
+      }
+      header .title {
+        font-weight: 700;
+      }
+      header .actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .btn {
+        background: #0b1220;
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 4px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.15s ease;
+      }
+      .btn:hover {
+        border-color: #2f3f59;
+      }
+      .btn.accent {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.35);
+        color: #86efac;
+      }
+      .btn.danger {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.35);
+        color: #fecaca;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: var(--c1, 300px) var(--c2, 1.2fr) 1fr;
+        gap: 10px;
+        padding: 10px;
+        height: calc(100vh - 46px);
+        box-sizing: border-box;
+      }
+      /* Resize handles (edge hot-zone on first two panels) */
+      .panel.resizable {
+        position: relative;
+      }
+      .panel.resizable::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 8px;
+        height: 100%;
+        cursor: col-resize;
+        background: transparent;
+      }
+      .resizing * {
+        cursor: col-resize !important;
+      }
+      .panel {
+        background: linear-gradient(
+          180deg,
+          rgba(17, 24, 39, 0.9),
+          rgba(2, 6, 23, 0.9)
+        );
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .panel h3 {
+        margin: 0;
+        padding: 4px 10px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+        color: #cbd5e1;
+        background: rgba(2, 6, 23, 0.35);
+      }
+      .projects-toolbar {
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.25);
+      }
+      .projects {
+        padding: 8px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+        overflow: auto;
+      }
+      .project-item {
+        background: #0b1220;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        color: #cbd5e1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .project-item.active {
+        border-color: rgba(34, 197, 94, 0.35);
+        color: #e5e7eb;
+      }
+      /* Toast notifications */
+      .toast-container {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        display: grid;
+        gap: 8px;
+        z-index: 50;
+      }
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #0b1220;
+        color: #e5e7eb;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      }
+      .toast.info {
+        border-color: #2f3f59;
+      }
+      .toast.success {
+        border-color: rgba(34, 197, 94, 0.35);
+      }
+      .toast.warn {
+        border-color: #f59e0b88;
+      }
+      .toast.error {
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+      .editor {
+        display: flex;
+        flex-direction: column;
+      }
+      .editor textarea {
+        flex: 1;
+        resize: none;
+        width: 100%;
+        background: #0b1220;
+        color: #e2e8f0;
+        border: 0;
+        outline: none;
+        padding: 10px;
+        line-height: 1.45;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+      }
+      .editor .hint {
+        font-size: 12px;
+        color: #9ca3af;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border);
+        background: #0b1220;
+      }
+      .preview {
+        position: relative;
+      }
+      .pv-toolbar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.25);
+      }
+      .pv-toolbar .btn {
+        padding: 6px 10px;
+      }
+      .preview .canvas {
+        background: #0b1220;
+        flex: 1;
+        overflow: auto;
+        padding: 10px;
+      }
+      .zoom-stage {
+        transform-origin: 0 0;
+        will-change: transform;
+      }
+      .error {
+        color: #fecaca;
+        background: rgba(239, 68, 68, 0.08);
+        border-top: 1px solid rgba(239, 68, 68, 0.35);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 12px;
+        padding: 8px 12px;
+        display: none;
+      }
+      .drop-target {
+        outline: 2px dashed rgba(34, 197, 94, 0.35);
+        outline-offset: -6px;
+      }
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+          grid-auto-rows: minmax(260px, auto);
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="title">Mermaid Editor — Drag & Drop Flowchart</div>
+        <div class="actions">
+          <button id="btn-export" class="btn accent">Export</button>
+          <button id="btn-clear" class="btn danger">Clear</button>
+          <button id="btn-toggle-chat" class="btn">AI Chat</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel resizable">
+          <h3>Projects</h3>
+          <div class="projects-toolbar">
+            <button id="btn-new-project" class="btn" title="New Project">
+              ➕
+            </button>
+            <button id="btn-rename-project" class="btn" title="Rename Project">
+              ✏️
+            </button>
+            <button
+              id="btn-delete-project"
+              class="btn danger"
+              title="Delete Project"
+            >
+              🗑️
+            </button>
+          </div>
+          <div id="projects" class="projects"></div>
+        </section>
+
+        <div
+          id="toast-container"
+          class="toast-container"
+          aria-live="polite"
+        ></div>
+
+        <section class="panel editor resizable">
+          <h3>Mermaid Code</h3>
+          <textarea
+            id="code"
+            spellcheck="false"
+            placeholder="Example:
+flowchart TD
+  A[Start] --> B{Condition?}
+  B -- Yes --> C[Do something]
+  B -- No  --> D[Do otherwise]
+  C --> E[End]
+  D --> E[End]"
+          ></textarea>
+          <div class="hint" style="display: flex">
+            Drag from the palette or double-click to insert. Ctrl/Cmd+S to save,
+            Ctrl/Cmd+Enter to render.
+            <div class="pv-toolbar">
+              <button id="btn-undo" class="btn" title="Undo (Ctrl/Cmd+Z)">
+                ↶
+              </button>
+              <button id="btn-redo" class="btn" title="Redo (Ctrl/Cmd+Y)">
+                ↷
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel preview">
+          <div class="pv-toolbar">
+            <h3>Preview</h3>
+            <button id="zoom-in" class="btn">+</button>
+            <button id="zoom-out" class="btn">−</button>
+            <button id="zoom-reset" class="btn">100%</button>
+            <span
+              id="zoom-label"
+              style="margin-inline-start: auto; color: #9ca3af; font-size: 12px"
+              >100%</span
+            >
+          </div>
+          <div id="preview" class="canvas">
+            <div id="zoom-stage" class="zoom-stage"></div>
+          </div>
+          <div id="error" class="error"></div>
+        </section>
+      </main>
+      <!-- Chatbox -->
+      <section id="chatbox" class="chatbox" aria-live="polite">
+        <div class="cb-header">
+          <span
+            >Mermaid Assistant <span id="cb-status" class="cb-status"></span
+          ></span>
+          <div class="row">
+            <button id="btn-clear-chat" class="btn">Clear Chat</button>
+            <button id="btn-close-chat" class="btn">×</button>
+          </div>
+        </div>
+        <div id="cb-body" class="cb-body"></div>
+        <div class="cb-key" id="cb-key-row">
+          <input
+            id="cb-api-key"
+            type="password"
+            placeholder="OpenRouter API Key (sk-or-...)"
+          />
+          <button id="btn-save-key" class="btn">Save Key</button>
+        </div>
+        <div class="cb-footer">
+          <input
+            id="cb-input"
+            type="text"
+            placeholder="e.g., add a new node between A and B"
+          />
+          <button id="cb-send" class="btn accent">Send</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      // ---------- Persist Keys ----------
+      const STORAGE_KEY = "mermaid-editor-code-v1";
+
+      // ---------- Elements ----------
+      const codeEl = document.getElementById("code");
+      const previewEl = document.getElementById("preview");
+      const zoomStage = document.getElementById("zoom-stage");
+      const zoomInBtn = document.getElementById("zoom-in");
+      const zoomOutBtn = document.getElementById("zoom-out");
+      const zoomResetBtn = document.getElementById("zoom-reset");
+      const zoomLabel = document.getElementById("zoom-label");
+      const errorEl = document.getElementById("error");
+      const btnExport = document.getElementById("btn-export");
+      const btnClear = document.getElementById("btn-clear");
+      const btnSample = null;
+      const btnAdvanced = null;
+      // Projects elements
+      const projectsEl = document.getElementById("projects");
+      const btnNewProject = document.getElementById("btn-new-project");
+      const btnRenameProject = document.getElementById("btn-rename-project");
+      const btnDeleteProject = document.getElementById("btn-delete-project");
+      // Chat elements
+      const btnToggleChat = document.getElementById("btn-toggle-chat");
+      const chatbox = document.getElementById("chatbox");
+      const cbBody = document.getElementById("cb-body");
+      const cbInput = document.getElementById("cb-input");
+      const cbSend = document.getElementById("cb-send");
+      const cbApiKey = document.getElementById("cb-api-key");
+      const cbKeyRow = document.getElementById("cb-key-row");
+      const btnSaveKey = document.getElementById("btn-save-key");
+      const btnCloseChat = document.getElementById("btn-close-chat");
+      const btnClearChat = document.getElementById("btn-clear-chat");
+      const cbStatus = document.getElementById("cb-status");
+      // Undo/Redo buttons
+      const btnUndo = document.getElementById("btn-undo");
+      const btnRedo = document.getElementById("btn-redo");
+      // Toasts
+      const toastContainer = document.getElementById("toast-container");
+
+      // ---------- Mermaid Init ----------
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "loose",
+        theme: "default",
+      });
+
+      // ---------- OpenRouter Chat Assistant ----------
+      const OR_KEY_STORE = "MERMAID_OPENROUTER_KEY_V1";
+      const DEFAULT_MODEL = "google/gemini-2.5-flash";
+      const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+      function loadApiKey() {
+        try {
+          const k = localStorage.getItem(OR_KEY_STORE);
+          if (k && cbApiKey) cbApiKey.value = k;
+          if (cbKeyRow) cbKeyRow.style.display = k ? "none" : "grid";
+          return k || "";
+        } catch {
+          return "";
+        }
+      }
+      function saveApiKey(key) {
+        try {
+          localStorage.setItem(OR_KEY_STORE, key || "");
+          if (cbKeyRow) cbKeyRow.style.display = key ? "none" : "grid";
+        } catch {}
+      }
+
+      function appendMsg(role, text) {
+        const div = document.createElement("div");
+        div.className = `msg ${role}`;
+        div.textContent = text;
+        cbBody.appendChild(div);
+        cbBody.scrollTop = cbBody.scrollHeight;
+      }
+
+      function extractMermaidFrom(content) {
+        if (!content) return "";
+        // Try triple backticks with mermaid
+        const mermaidFence = content.match(/```\s*mermaid\s*\n([\s\S]*?)```/i);
+        if (mermaidFence) return mermaidFence[1].trim();
+        // Any fenced block
+        const anyFence = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+        if (anyFence) return anyFence[1].trim();
+        // Otherwise, return raw content
+        return content.trim();
+      }
+
+      async function callOpenRouter(userInstruction) {
+        const apiKey = (cbApiKey && cbApiKey.value) || loadApiKey();
+        if (!apiKey) {
+          throw new Error("Please enter and save your OpenRouter API key.");
+        }
+        const currentCode = codeEl.value || "";
+        const systemPrompt =
+          "You are a helpful Mermaid code assistant. Given the current Mermaid diagram and the user's change request, respond ONLY with the updated Mermaid code. Do not include explanations. If the user's request is ambiguous, make a reasonable assumption and produce the full updated Mermaid code.";
+        const messages = [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content:
+              "Current Mermaid code:\n\n" +
+              currentCode +
+              "\n\nChange request:\n" +
+              userInstruction,
+          },
+        ];
+        const payload = {
+          model: DEFAULT_MODEL,
+          messages,
+          temperature: 0.2,
+        };
+        const res = await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            "X-Title": "Mermaid Editor",
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error("OpenRouter error: " + res.status + " - " + txt);
+        }
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content || "";
+        return extractMermaidFrom(content);
+      }
+
+      function applyMermaidUpdate(newCode) {
+        if (!newCode) return false;
+        codeEl.value = newCode;
+        saveToStorage();
+        pushSnapshot();
+        renderMermaid();
+        return true;
+      }
+
+      function setChatLoading(loading) {
+        if (loading) {
+          cbSend.disabled = true;
+          cbSend.textContent = "...";
+          if (cbStatus) cbStatus.textContent = "Sending...";
+          appendMsg("assistant", "Sending request to model...");
+        } else {
+          cbSend.disabled = false;
+          cbSend.textContent = "Send";
+          if (cbStatus) cbStatus.textContent = "";
+        }
+      }
+
+      // Chat UI events
+      if (btnToggleChat)
+        btnToggleChat.addEventListener("click", () => {
+          chatbox.classList.toggle("open");
+          if (chatbox.classList.contains("open")) {
+            loadApiKey();
+            setTimeout(() => cbInput && cbInput.focus(), 0);
+          }
+        });
+      if (btnCloseChat)
+        btnCloseChat.addEventListener("click", () => {
+          chatbox.classList.remove("open");
+        });
+      if (btnSaveKey)
+        btnSaveKey.addEventListener("click", () => {
+          saveApiKey(cbApiKey.value.trim());
+          appendMsg("assistant", "Key saved. You can now send your request.");
+        });
+      if (btnClearChat)
+        btnClearChat.addEventListener("click", () => {
+          cbBody.innerHTML = "";
+        });
+
+      async function handleChatSend() {
+        const text = (cbInput.value || "").trim();
+        if (!text) return;
+        appendMsg("user", text);
+        cbInput.value = "";
+        setChatLoading(true);
+        try {
+          const updated = await callOpenRouter(text);
+          if (updated) {
+            if (cbStatus) cbStatus.textContent = "Response received.";
+            appendMsg("assistant", "Response received. Applying code...");
+            applyMermaidUpdate(updated);
+          } else {
+            appendMsg(
+              "assistant",
+              "Could not find valid Mermaid output. Please be more specific."
+            );
+          }
+        } catch (e) {
+          appendMsg("assistant", "Error: " + (e?.message || e));
+        } finally {
+          setChatLoading(false);
+        }
+      }
+
+      if (cbSend) cbSend.addEventListener("click", handleChatSend);
+      if (cbInput)
+        cbInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleChatSend();
+          }
+        });
+
+      // Undo/Redo button handlers
+      if (btnUndo) btnUndo.addEventListener("click", () => undo());
+      if (btnRedo) btnRedo.addEventListener("click", () => redo());
+
+      // Ensure key row visibility on boot
+      loadApiKey();
+
+      // ---------- Projects (LocalStorage) ----------
+      const PROJECTS_KEY = "mermaid-editor-projects-v1";
+      const CURRENT_PROJECT_KEY = "mermaid-editor-current-project-v1";
+
+      function loadProjects() {
+        try {
+          const raw = localStorage.getItem(PROJECTS_KEY);
+          const obj = raw ? JSON.parse(raw) : {};
+          return obj && typeof obj === "object" ? obj : {};
+        } catch {
+          return {};
+        }
+      }
+      function saveProjects(projects) {
+        try {
+          localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+        } catch {}
+      }
+      function getCurrentProjectId() {
+        try {
+          return localStorage.getItem(CURRENT_PROJECT_KEY) || "";
+        } catch {
+          return "";
+        }
+      }
+      function setCurrentProjectId(id) {
+        try {
+          localStorage.setItem(CURRENT_PROJECT_KEY, id || "");
+        } catch {}
+      }
+
+      function renderProjects() {
+        if (!projectsEl) return;
+        const projects = loadProjects();
+        const activeId = getCurrentProjectId();
+        projectsEl.innerHTML = "";
+        const entries = Object.entries(projects);
+        if (entries.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "project-item";
+          empty.textContent = "No projects yet";
+          projectsEl.appendChild(empty);
+          return;
+        }
+        for (const [id, proj] of entries) {
+          const item = document.createElement("div");
+          item.className = "project-item" + (id === activeId ? " active" : "");
+          item.innerHTML = `<span>${proj.name || "Untitled"}</span>`;
+          item.addEventListener("click", () => switchToProject(id));
+          projectsEl.appendChild(item);
+        }
+      }
+
+      function createProject() {
+        const name = prompt("Project name:", "New Project");
+        if (name == null) return;
+        const id = "p_" + Date.now();
+        const projects = loadProjects();
+        projects[id] = {
+          id,
+          name: name.trim() || "Untitled",
+          code: codeEl.value || "",
+        };
+        saveProjects(projects);
+        setCurrentProjectId(id);
+        renderProjects();
+        showToast("success", "✅ Project created");
+      }
+      function renameProject() {
+        const id = getCurrentProjectId();
+        if (!id) return;
+        const projects = loadProjects();
+        const curr = projects[id];
+        if (!curr) return;
+        const name = prompt("Rename project:", curr.name || "Untitled");
+        if (name == null) return;
+        curr.name = name.trim() || "Untitled";
+        saveProjects(projects);
+        renderProjects();
+        showToast("info", "✏️ Project renamed");
+      }
+      function deleteProject() {
+        const id = getCurrentProjectId();
+        if (!id) return;
+        const projects = loadProjects();
+        if (!projects[id]) return;
+        const ok = confirm("🗑️ Delete this project? This cannot be undone.");
+        if (!ok) return;
+        delete projects[id];
+        saveProjects(projects);
+        const firstId = Object.keys(projects)[0] || "";
+        setCurrentProjectId(firstId);
+        if (firstId && projects[firstId]) {
+          codeEl.value = projects[firstId].code || "";
+          saveToStorage();
+          initHistory();
+          renderMermaid();
+        } else {
+          codeEl.value = "";
+          saveToStorage();
+          initHistory();
+          renderMermaid();
+        }
+        renderProjects();
+        showToast("error", "🗑️ Project deleted");
+      }
+      function switchToProject(id) {
+        const projects = loadProjects();
+        const proj = projects[id];
+        if (!proj) return;
+        setCurrentProjectId(id);
+        codeEl.value = proj.code || "";
+        saveToStorage();
+        initHistory();
+        renderMermaid();
+        renderProjects();
+      }
+
+      function persistCurrentProjectCode() {
+        const id = getCurrentProjectId();
+        if (!id) return;
+        const projects = loadProjects();
+        if (!projects[id]) return;
+        projects[id].code = codeEl.value || "";
+        saveProjects(projects);
+        // Optional: could debounce and toast on save if needed
+      }
+
+      function showToast(type, message) {
+        if (!toastContainer) return;
+        const el = document.createElement("div");
+        el.className = `toast ${type}`;
+        el.textContent = message;
+        toastContainer.appendChild(el);
+        setTimeout(() => {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 2200);
+      }
+
+      function insertAtCursor(textarea, text) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const before = textarea.value.substring(0, start);
+        const after = textarea.value.substring(end);
+        textarea.value = before + text + after;
+        const pos = start + text.length;
+        textarea.selectionStart = textarea.selectionEnd = pos;
+        textarea.focus();
+        saveToStorageDebounced();
+        renderDebounced();
+      }
+
+      // ---------- Persistence ----------
+      function loadFromStorage() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved != null) codeEl.value = saved;
+      }
+      function saveToStorage() {
+        localStorage.setItem(STORAGE_KEY, codeEl.value);
+      }
+      const saveToStorageDebounced = debounce(saveToStorage, 300);
+
+      // ---------- Render ----------
+      async function renderMermaid() {
+        errorEl.style.display = "none";
+        errorEl.textContent = "";
+        if (zoomStage) zoomStage.innerHTML = "";
+        const code = codeEl.value.trim();
+        if (!code) return;
+        try {
+          // Ensure diagram starts with a diagram directive; if not, prepend flowchart TD
+          const prepared =
+            /^\s*(graph|flowchart|sequenceDiagram|classDiagram|erDiagram|journey|gantt|pie)\b/.test(
+              code
+            )
+              ? code
+              : "flowchart TD\n" + code;
+          const { svg } = await mermaid.render(
+            "mermaid-graph-" + Date.now(),
+            prepared
+          );
+          if (zoomStage) {
+            zoomStage.innerHTML = svg;
+            bindInlineEdit();
+          } else {
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = svg;
+            previewEl.appendChild(wrapper);
+          }
+        } catch (err) {
+          errorEl.textContent = String(err && err.message ? err.message : err);
+          errorEl.style.display = "block";
+        }
+      }
+      const renderDebounced = debounce(renderMermaid, 350);
+
+      // ---------- Events ----------
+      codeEl.addEventListener("input", () => {
+        saveToStorageDebounced();
+        persistCurrentProjectCode();
+        pushSnapshotDebounced();
+        renderDebounced();
+      });
+      codeEl.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          saveToStorage();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+          e.preventDefault();
+          undo();
+          return;
+        }
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          (e.key.toLowerCase() === "y" ||
+            (e.shiftKey && e.key.toLowerCase() === "z"))
+        ) {
+          e.preventDefault();
+          redo();
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          renderMermaid();
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          insertAtCursor(codeEl, "  ");
+        }
+      });
+
+      if (btnExport) btnExport.addEventListener("click", exportAll);
+      btnClear.addEventListener("click", () => {
+        codeEl.value = "";
+        saveToStorage();
+        persistCurrentProjectCode();
+        renderMermaid();
+      });
+      // Advanced sample
+      const ADV_SAMPLE = `graph TD
+    subgraph subGraph0["API Layer (NestJS API Gateway)"]
+        direction TB
+        A["<b>POST</b> /documents<br/><i>Create Document</i>"]
+        B["<b>PUT</b> /documents/{docId}<br/><i>Update Document</i>"]
+        C["<b>DELETE</b> /documents/{docId}<br/><i>Delete Document</i>"]
+
+        A -- "1. Validate Schema<br/>2. Check Permissions" --> E1(Endpoint Logic)
+        B -- "1. Validate Schema<br/>2. Check Permissions" --> E2(Endpoint Logic)
+        C -- "1. Validate Schema<br/>2. Check Permissions" --> E3(Endpoint Logic)
+    end
+
+    subgraph subGraph4["Workflow Layer (Temporal Python)"]
+        W(ManageDocument Workflow <br/> <b>Saga Coordinator</b>)
+        
+        subgraph "Step 1: Sequential"
+            D[Execute on Directus API]
+        end
+
+        subgraph "Step 2: Parallel"
+            E[Index on Qdrant API]
+            F[Index on Elasticsearch API]
+        end
+
+        sync_point((( )))
+        style sync_point fill:#fff,stroke:#fff
+        I{Job Succeeded}
+        J{Job Failed & Rolled Back}
+        
+        subgraph "Compensation Steps (on failure)"
+            direction TB
+            Compensate_Parallel["Compensate Parallel Steps<br/>(Qdrant & Elastic if they succeeded)"]
+            Compensate_Directus[Compensate Directus Change]
+            Compensate_Parallel --> Compensate_Directus
+        end
+
+        W --> D
+        D -- success --> E & F
+        D -- failure --> J
+        
+        E --> sync_point
+        F --> sync_point
+        
+        sync_point -- all success --> I
+        sync_point -- failure --> Compensate_Parallel
+        Compensate_Directus --> J
+    end
+
+    %% API → Workflow
+    E1 -- startWorkflow({type:'CREATE_DOC', collectionId, ...payload}) --> W
+    E2 -- startWorkflow({type:'UPDATE_DOC', collectionId, docId, ...payload}) --> W
+    E3 -- startWorkflow({type:'DELETE_DOC', collectionId, docId}) --> W
+
+    style I fill:#a5d6a7,stroke:#2e7d32
+    style J fill:#ef9a9a,stroke:#c62828`;
+
+      // Samples will be added as initial projects, not buttons
+
+      // Remove palette sample injection
+
+      // ---------- Utils ----------
+      function debounce(fn, wait) {
+        let t = null;
+        return function (...args) {
+          clearTimeout(t);
+          t = setTimeout(() => fn.apply(this, args), wait);
+        };
+      }
+
+      // ---------- Export Helpers ----------
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+      function downloadText(text, filename) {
+        downloadBlob(
+          new Blob([text], { type: "text/plain;charset=utf-8" }),
+          filename
+        );
+      }
+      function svgString() {
+        const svgEl = zoomStage && zoomStage.querySelector("svg");
+        if (!svgEl) return "";
+        const clone = svgEl.cloneNode(true);
+        // ensure xmlns
+        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+        // size from viewBox if missing
+        let width = Number(clone.getAttribute("width"));
+        let height = Number(clone.getAttribute("height"));
+        const vb = clone.getAttribute("viewBox");
+        if ((!width || !height) && vb) {
+          const parts = vb.split(/\s+/).map(Number);
+          if (parts.length === 4) {
+            width = parts[2];
+            height = parts[3];
+          }
+        }
+        if (width && height) {
+          clone.setAttribute("width", String(Math.ceil(width)));
+          clone.setAttribute("height", String(Math.ceil(height)));
+        }
+        // force white background using rect
+        const bg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "rect"
+        );
+        bg.setAttribute("x", "0");
+        bg.setAttribute("y", "0");
+        bg.setAttribute("width", clone.getAttribute("width") || "100%");
+        bg.setAttribute("height", clone.getAttribute("height") || "100%");
+        bg.setAttribute("fill", "#ffffff");
+        clone.insertBefore(bg, clone.firstChild);
+        const serializer = new XMLSerializer();
+        return serializer.serializeToString(clone);
+      }
+      function svgToPngOrJpg(svg, type) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          const svgBlob = new Blob([svg], {
+            type: "image/svg+xml;charset=utf-8",
+          });
+          const url = URL.createObjectURL(svgBlob);
+          img.decoding = "sync";
+          img.onload = () => {
+            const w = img.naturalWidth || img.width || 2048;
+            const h = img.naturalHeight || img.height || 1024;
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  // fallback via dataURL
+                  const dataUrl = canvas.toDataURL(
+                    type === "jpg" ? "image/jpeg" : "image/png",
+                    0.92
+                  );
+                  const fallbackBlob = fetch(dataUrl)
+                    .then((r) => r.blob())
+                    .then(resolve);
+                  return fallbackBlob;
+                }
+                resolve(blob);
+              },
+              type === "jpg" ? "image/jpeg" : "image/png",
+              0.92
+            );
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(null);
+          };
+          img.src = url;
+        });
+      }
+      async function exportAll() {
+        // ensure latest render
+        await renderMermaid();
+        const code = codeEl.value;
+        if (!code.trim()) return;
+        // .mmd
+        downloadText(code, "diagram.mmd");
+        // .svg
+        const svg = svgString();
+        if (svg)
+          downloadBlob(
+            new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+            "diagram.svg"
+          );
+        // .jpg (white background)
+        if (svg) {
+          const blob = await svgToPngOrJpg(svg, "jpg");
+          if (blob) downloadBlob(blob, "diagram.jpg");
+        }
+      }
+
+      // ---------- History (Undo/Redo) ----------
+      const historyStack = [];
+      const redoStack = [];
+      function initHistory() {
+        historyStack.length = 0;
+        redoStack.length = 0;
+        historyStack.push(codeEl.value);
+      }
+      function pushSnapshot() {
+        const curr = codeEl.value;
+        const last = historyStack[historyStack.length - 1];
+        if (curr !== last) {
+          historyStack.push(curr);
+          redoStack.length = 0;
+        }
+      }
+      const pushSnapshotDebounced = debounce(pushSnapshot, 300);
+      function undo() {
+        if (historyStack.length > 1) {
+          const curr = historyStack.pop();
+          redoStack.push(curr);
+          codeEl.value = historyStack[historyStack.length - 1] || "";
+          saveToStorage();
+          renderMermaid();
+        }
+      }
+      function redo() {
+        if (redoStack.length > 0) {
+          const next = redoStack.pop();
+          historyStack.push(next);
+          codeEl.value = next;
+          saveToStorage();
+          renderMermaid();
+        }
+      }
+
+      // ---------- Boot ----------
+      // Initialize projects list and ensure a default project exists
+      (function initProjects() {
+        let projects = loadProjects();
+        let active = getCurrentProjectId();
+        if (Object.keys(projects).length === 0) {
+          const id1 = "p_" + Date.now();
+          const id2 = "p_" + (Date.now() + 1);
+          const sample1 = `flowchart TD\n  A([Start]) --> B{Condition?}\n  B -- Yes --> C[Do something]\n  B -- No  --> D[Do otherwise]\n  C --> E([End])\n  D --> E([End])`;
+          const sample2 = ADV_SAMPLE;
+          projects[id1] = { id: id1, name: "Sample Flowchart", code: sample1 };
+          projects[id2] = { id: id2, name: "Advanced Sample", code: sample2 };
+          saveProjects(projects);
+          setCurrentProjectId(id1);
+          active = id1;
+        }
+        renderProjects();
+        if (active && projects[active]) {
+          codeEl.value = projects[active].code || codeEl.value || "";
+        }
+      })();
+      loadFromStorage();
+      if (!codeEl.value.trim()) {
+        codeEl.value =
+          "flowchart TD\n  A([Start]) --> B{Condition?}\n  B -- Yes --> C[Do something]\n  B -- No  --> D[Do otherwise]\n  C --> E([End])\n  D --> E([End])";
+      }
+      saveToStorage();
+      persistCurrentProjectCode();
+      initHistory();
+      renderMermaid();
+
+      // Project toolbar events
+      if (btnNewProject) btnNewProject.addEventListener("click", createProject);
+      if (btnRenameProject)
+        btnRenameProject.addEventListener("click", renameProject);
+      if (btnDeleteProject)
+        btnDeleteProject.addEventListener("click", deleteProject);
+
+      // ---------- Zoom & Pan ----------
+      const Z_KEY = "mermaid-editor-zoom-v1";
+      let scale = 1;
+      let offsetX = 0;
+      let offsetY = 0;
+      const minScale = 0.25;
+      const maxScale = 3;
+      let editingActive = false;
+
+      function loadZoom() {
+        try {
+          const raw = localStorage.getItem(Z_KEY);
+          if (!raw) return;
+          const obj = JSON.parse(raw);
+          scale = obj.scale ?? 1;
+          offsetX = obj.x ?? 0;
+          offsetY = obj.y ?? 0;
+        } catch {}
+      }
+      function saveZoom() {
+        try {
+          localStorage.setItem(
+            Z_KEY,
+            JSON.stringify({ scale, x: offsetX, y: offsetY })
+          );
+        } catch {}
+      }
+      function applyTransform() {
+        if (zoomStage)
+          zoomStage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        if (zoomLabel) zoomLabel.textContent = Math.round(scale * 100) + "%";
+      }
+      function zoomAt(pointX, pointY, delta) {
+        const prev = scale;
+        scale = Math.min(
+          maxScale,
+          Math.max(minScale, scale * (delta > 0 ? 1.1 : 0.9))
+        );
+        const factor = scale / prev;
+        // Keep the point under cursor stable
+        offsetX = pointX - factor * (pointX - offsetX);
+        offsetY = pointY - factor * (pointY - offsetY);
+        applyTransform();
+        saveZoom();
+      }
+
+      if (previewEl) {
+        // Mouse wheel zoom centered on cursor
+        previewEl.addEventListener(
+          "wheel",
+          (e) => {
+            // Zoom with wheel without modifier for convenience
+            e.preventDefault();
+            const rect = previewEl.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            zoomAt(x, y, e.deltaY < 0 ? 1 : -1);
+          },
+          { passive: false }
+        );
+
+        // Pan with mouse drag
+        let isPanning = false;
+        let startX = 0,
+          startY = 0;
+        previewEl.addEventListener("mousedown", (e) => {
+          if (e.button !== 0 || editingActive) return;
+          isPanning = true;
+          startX = e.clientX - offsetX;
+          startY = e.clientY - offsetY;
+          previewEl.style.cursor = "grabbing";
+        });
+        document.addEventListener("mousemove", (e) => {
+          if (!isPanning) return;
+          offsetX = e.clientX - startX;
+          offsetY = e.clientY - startY;
+          applyTransform();
+        });
+        document.addEventListener("mouseup", () => {
+          if (!isPanning) return;
+          isPanning = false;
+          previewEl.style.cursor = "auto";
+          saveZoom();
+        });
+      }
+
+      // Buttons
+      function zoomBy(step) {
+        const rect = previewEl.getBoundingClientRect();
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        zoomAt(cx, cy, step);
+      }
+      if (zoomInBtn) zoomInBtn.addEventListener("click", () => zoomBy(1));
+      if (zoomOutBtn) zoomOutBtn.addEventListener("click", () => zoomBy(-1));
+      if (zoomResetBtn)
+        zoomResetBtn.addEventListener("click", () => {
+          scale = 1;
+          offsetX = 0;
+          offsetY = 0;
+          applyTransform();
+          saveZoom();
+        });
+
+      loadZoom();
+      applyTransform();
+
+      // ---------- Inline Edit on SVG (nodes) ----------
+      function getNodeIdFromGroup(g) {
+        if (!g) return null;
+        if (g.dataset && g.dataset.id) return g.dataset.id;
+        if (g.id) {
+          const m = g.id.match(/-(\w+)$/);
+          if (m) return m[1];
+        }
+        return null;
+      }
+
+      function escapeLabelForMermaid(label) {
+        if (label == null) return "";
+        return label
+          .replaceAll("&", "&amp;")
+          .replaceAll("\n", "<br/>")
+          .replaceAll("[", "&#91;")
+          .replaceAll("]", "&#93;")
+          .replaceAll("{", "&#123;")
+          .replaceAll("}", "&#125;")
+          .replaceAll("(", "&#40;")
+          .replaceAll(")", "&#41;")
+          .replaceAll("|", "&#124;");
+      }
+
+      function updateNodeLabelInCode(nodeId, newLabel) {
+        const lines = codeEl.value.split("\n");
+        const id = nodeId;
+        const safe = escapeLabelForMermaid(newLabel);
+        const patterns = [
+          new RegExp(`^(\\s*)${id}\\[(.*)\\]\\s*$`),
+          new RegExp(`^(\\s*)${id}\\((.*)\\)\\s*$`),
+          new RegExp(`^(\\s*)${id}\\{(.*)\\}\\s*$`),
+          new RegExp(`^(\\s*)${id}\\(\\((.*)\\)\\)\\s*$`),
+          new RegExp(`^(\\s*)${id}\\[\\[(.*)\\]\\]\\s*$`),
+        ];
+        for (let i = 0; i < lines.length; i++) {
+          for (let idx = 0; idx < patterns.length; idx++) {
+            const p = patterns[idx];
+            const m = lines[i].match(p);
+            if (m) {
+              const indent = m[1] || "";
+              switch (idx) {
+                case 0:
+                  lines[i] = `${indent}${id}[${safe}]`;
+                  break;
+                case 1:
+                  lines[i] = `${indent}${id}(${safe})`;
+                  break;
+                case 2:
+                  lines[i] = `${indent}${id}{${safe}}`;
+                  break;
+                case 3:
+                  lines[i] = `${indent}${id}(( ${safe} ))`;
+                  break;
+                case 4:
+                  lines[i] = `${indent}${id}[[${safe}]]`;
+                  break;
+              }
+              codeEl.value = lines.join("\n");
+              saveToStorage();
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function bindInlineEdit() {
+        const svg = zoomStage && zoomStage.querySelector("svg");
+        if (!svg) return;
+        const nodes = svg.querySelectorAll("g.node");
+        nodes.forEach((g) => {
+          // Click to highlight corresponding code in textarea
+          g.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const nodeId = getNodeIdFromGroup(g);
+            if (!nodeId) return;
+            const range = findCodeRangeForNode(nodeId);
+            if (range) {
+              selectAndReveal(range.start, range.end);
+            }
+          });
+          g.addEventListener("dblclick", (ev) => {
+            ev.stopPropagation();
+            const nodeId = getNodeIdFromGroup(g);
+            if (!nodeId) return;
+            const fobj = g.querySelector("foreignObject");
+            if (fobj) {
+              const labelDiv = fobj.querySelector("div") || fobj;
+              editingActive = true;
+              labelDiv.setAttribute("contenteditable", "true");
+              labelDiv.focus();
+              const finish = () => {
+                labelDiv.removeAttribute("contenteditable");
+                editingActive = false;
+                const newText = labelDiv.innerText.trim();
+                if (!newText) return;
+                if (updateNodeLabelInCode(nodeId, newText)) {
+                  pushSnapshot();
+                  renderMermaid();
+                }
+              };
+              function onKey(e) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  labelDiv.removeEventListener("keydown", onKey);
+                  finish();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  labelDiv.removeEventListener("keydown", onKey);
+                  editingActive = false;
+                  labelDiv.blur();
+                }
+              }
+              labelDiv.addEventListener("keydown", onKey);
+              labelDiv.addEventListener("blur", finish, { once: true });
+              return;
+            }
+            const textEl = g.querySelector("text");
+            if (!textEl) return;
+            const rect = textEl.getBoundingClientRect();
+            const hostRect = previewEl.getBoundingClientRect();
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = (textEl.textContent || "").trim();
+            Object.assign(input.style, {
+              position: "absolute",
+              left: rect.left - hostRect.left + "px",
+              top: rect.top - hostRect.top + "px",
+              width: Math.max(120, rect.width + 20) + "px",
+              height: Math.max(24, rect.height + 8) + "px",
+              border: "1px solid #64748b",
+              borderRadius: "6px",
+              background: "#0b1220",
+              color: "#e2e8f0",
+              padding: "4px 8px",
+              zIndex: 20,
+            });
+            previewEl.appendChild(input);
+            editingActive = true;
+            input.focus();
+            const commit = () => {
+              const newText = input.value.trim();
+              previewEl.removeChild(input);
+              editingActive = false;
+              if (!newText) return;
+              if (updateNodeLabelInCode(nodeId, newText)) {
+                pushSnapshot();
+                renderMermaid();
+              }
+            };
+            input.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                previewEl.removeChild(input);
+                editingActive = false;
+              }
+            });
+            input.addEventListener("blur", commit, { once: true });
+          });
+        });
+        // Edge click highlight (best-effort): find first <path> parent 'g.edgeLabel' or related
+        const edgeLabels = svg.querySelectorAll("g.edgeLabel");
+        edgeLabels.forEach((el) => {
+          el.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const textEl = el.querySelector("text");
+            const label = ((textEl && textEl.textContent) || "").trim();
+            // Heuristic: try to find a line containing the label around an edge operator
+            const code = codeEl.value.split("\n");
+            for (let i = 0, off = 0; i < code.length; i++) {
+              const line = code[i];
+              if (
+                /--|->|==|\.-/.test(line) &&
+                (!label || line.includes(label))
+              ) {
+                const start = off;
+                const end = off + line.length;
+                selectAndReveal(start, end);
+                break;
+              }
+              off += line.length + 1;
+            }
+          });
+        });
+      }
+
+      // Locate node declaration line(s) in Mermaid code and return char offsets
+      function findCodeRangeForNode(nodeId) {
+        const code = codeEl.value;
+        const lines = code.split("\n");
+        let offset = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const m = line.match(
+            new RegExp(
+              `^(\\s*)${nodeId}(\\[.*\\]|\\(.*\\)|\\{.*\\}|\\(\\(.*\\)\\)|\\[\\[.*\\]\\])\\s*$`
+            )
+          );
+          if (m) {
+            const start = offset;
+            const end = offset + line.length;
+            return { start, end, lineIndex: i };
+          }
+          offset += line.length + 1; // +1 for \n
+        }
+        return null;
+      }
+
+      function selectAndReveal(start, end) {
+        try {
+          codeEl.focus();
+          codeEl.selectionStart = start;
+          codeEl.selectionEnd = end;
+          // Scroll to make selection visible
+          const before = codeEl.value.substring(0, start);
+          const lineCount = (before.match(/\n/g) || []).length;
+          const lineHeight = 18; // approx
+          codeEl.scrollTop = Math.max(
+            0,
+            lineCount * lineHeight - codeEl.clientHeight / 2
+          );
+        } catch {}
+      }
+    </script>
+    <script>
+      // ---------- Resizable Columns ----------
+      const COLS_KEY = "mermaid-editor-cols-v1";
+      const layoutEl = document.querySelector(".layout");
+      const panelPalette = document.querySelectorAll(".layout > section")[0];
+      const panelEditor = document.querySelectorAll(".layout > section")[1];
+
+      function loadColsVars() {
+        try {
+          const raw = localStorage.getItem(COLS_KEY);
+          if (!raw) return;
+          const { c1, c2 } = JSON.parse(raw);
+          if (c1) layoutEl.style.setProperty("--c1", c1 + "px");
+          if (c2) layoutEl.style.setProperty("--c2", c2 + "px");
+        } catch {}
+      }
+      function saveColsVars(c1, c2) {
+        try {
+          const prev = (() => {
+            try {
+              return JSON.parse(localStorage.getItem(COLS_KEY) || "{}");
+            } catch {
+              return {};
+            }
+          })();
+          const next = { c1: c1 ?? prev.c1, c2: c2 ?? prev.c2 };
+          localStorage.setItem(COLS_KEY, JSON.stringify(next));
+        } catch {}
+      }
+
+      function makeResizable(panel, which) {
+        panel.addEventListener("mousemove", (e) => {
+          const nearEdge = e.offsetX > panel.clientWidth - 8;
+          panel.style.cursor = nearEdge ? "col-resize" : "auto";
+        });
+        panel.addEventListener("mousedown", (e) => {
+          const nearEdge = e.offsetX > panel.clientWidth - 8;
+          if (!nearEdge) return;
+          e.preventDefault();
+          const rect = layoutEl.getBoundingClientRect();
+          const startX = e.clientX;
+          const startC1 = document
+            .querySelectorAll(".layout > section")[0]
+            .getBoundingClientRect().width;
+          const startC2 = document
+            .querySelectorAll(".layout > section")[1]
+            .getBoundingClientRect().width;
+          document.body.classList.add("resizing");
+          const onMove = (ev) => {
+            const dx = ev.clientX - startX;
+            const minW = 180;
+            const maxW = Math.max(220, rect.width - 320);
+            if (which === "c1") {
+              let newC1 = Math.min(maxW, Math.max(minW, startC1 + dx));
+              layoutEl.style.setProperty("--c1", newC1 + "px");
+              saveColsVars(newC1, undefined);
+            } else if (which === "c2") {
+              let newC2 = Math.min(maxW, Math.max(minW, startC2 + dx));
+              layoutEl.style.setProperty("--c2", newC2 + "px");
+              saveColsVars(undefined, newC2);
+            }
+          };
+          const onUp = () => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            document.body.classList.remove("resizing");
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      }
+
+      makeResizable(panelPalette, "c1");
+      makeResizable(panelEditor, "c2");
+      loadColsVars();
+    </script>
+  </body>
+</html>
