@@ -20,7 +20,7 @@
         position: fixed;
         bottom: 16px;
         left: 16px;
-        width: 360px;
+        width: 460px;
         max-height: 70vh;
         display: none;
         flex-direction: column;
@@ -79,7 +79,8 @@
         gap: 8px;
       }
       .chatbox input[type="text"],
-      .chatbox input[type="password"] {
+      .chatbox input[type="password"],
+      .chatbox textarea {
         width: 100%;
         background: #0b1220;
         color: #e2e8f0;
@@ -87,6 +88,12 @@
         border-radius: 8px;
         padding: 8px 10px;
         outline: none;
+      }
+      .chatbox textarea {
+        min-height: 5.5em; /* ~5 lines with line-height ~1.1-1.2 */
+        max-height: 160px;
+        resize: vertical;
+        overflow: auto;
       }
       .chatbox .row {
         display: flex;
@@ -431,7 +438,8 @@ flowchart TD
             >Mermaid Assistant <span id="cb-status" class="cb-status"></span
           ></span>
           <div class="row">
-            <button id="btn-clear-chat" class="btn">Clear Chat</button>
+            <button id="btn-clear-chat" class="btn">🗑️</button>
+            <button id="btn-change-model" class="btn">Change Model</button>
             <button id="btn-close-chat" class="btn">×</button>
           </div>
         </div>
@@ -445,11 +453,11 @@ flowchart TD
           <button id="btn-save-key" class="btn">Save Key</button>
         </div>
         <div class="cb-footer">
-          <input
+          <textarea
             id="cb-input"
-            type="text"
-            placeholder="e.g., add a new node between A and B"
-          />
+            rows="5"
+            placeholder="e.g., add a new node between A and B (Ctrl/Cmd+Enter to send)"
+          ></textarea>
           <button id="cb-send" class="btn accent">Send</button>
         </div>
       </section>
@@ -505,7 +513,8 @@ flowchart TD
 
       // ---------- OpenRouter Chat Assistant ----------
       const OR_KEY_STORE = "MERMAID_OPENROUTER_KEY_V1";
-      const DEFAULT_MODEL = "qwen/qwen3-coder:free";
+      const OR_MODEL_STORE = "MERMAID_OPENROUTER_MODEL_V1";
+      const DEFAULT_MODEL = "deepseek/deepseek-chat-v3.1:free";
       const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
       function loadApiKey() {
@@ -523,6 +532,24 @@ flowchart TD
           localStorage.setItem(OR_KEY_STORE, key || "");
           if (cbKeyRow) cbKeyRow.style.display = key ? "none" : "grid";
         } catch {}
+      }
+
+      function loadModel() {
+        try {
+          const m = localStorage.getItem(OR_MODEL_STORE);
+          return (m || "").trim();
+        } catch {
+          return "";
+        }
+      }
+      function saveModel(model) {
+        try {
+          localStorage.setItem(OR_MODEL_STORE, model || "");
+        } catch {}
+      }
+      function getPreferredModel() {
+        const fromStore = loadModel();
+        return fromStore || DEFAULT_MODEL;
       }
 
       function appendMsg(role, text) {
@@ -550,6 +577,7 @@ flowchart TD
         if (!apiKey) {
           throw new Error("Please enter and save your OpenRouter API key.");
         }
+        const model = getPreferredModel();
         const currentCode = codeEl.value || "";
         const systemPrompt =
           "You are a helpful Mermaid code assistant. Given the current Mermaid diagram and the user's change request, respond ONLY with the updated Mermaid code. Do not include explanations. If the user's request is ambiguous, make a reasonable assumption and produce the full updated Mermaid code.";
@@ -565,7 +593,7 @@ flowchart TD
           },
         ];
         const payload = {
-          model: DEFAULT_MODEL,
+          model,
           messages,
           temperature: 0.2,
         };
@@ -627,6 +655,16 @@ flowchart TD
           saveApiKey(cbApiKey.value.trim());
           appendMsg("assistant", "Key saved. You can now send your request.");
         });
+      const btnChangeModel = document.getElementById("btn-change-model");
+      if (btnChangeModel)
+        btnChangeModel.addEventListener("click", () => {
+          const current = loadModel() || DEFAULT_MODEL;
+          const next = prompt("Model (OpenRouter):", current);
+          if (next == null) return;
+          const val = (next || "").trim();
+          saveModel(val);
+          appendMsg("assistant", `Model set to: ${val || DEFAULT_MODEL}`);
+        });
       if (btnClearChat)
         btnClearChat.addEventListener("click", () => {
           cbBody.innerHTML = "";
@@ -660,7 +698,9 @@ flowchart TD
       if (cbSend) cbSend.addEventListener("click", handleChatSend);
       if (cbInput)
         cbInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          const isEnter = e.key === "Enter";
+          const isModifier = e.ctrlKey || e.metaKey;
+          if (isEnter && isModifier) {
             e.preventDefault();
             handleChatSend();
           }
@@ -672,6 +712,8 @@ flowchart TD
 
       // Ensure key row visibility on boot
       loadApiKey();
+      // Load model on boot (if saved)
+      loadModel();
 
       // ---------- Projects (LocalStorage) ----------
       const PROJECTS_KEY = "mermaid-editor-projects-v1";
@@ -913,61 +955,14 @@ flowchart TD
         renderMermaid();
       });
       // Advanced sample
-      const ADV_SAMPLE = `graph TD
-    subgraph subGraph0["API Layer (NestJS API Gateway)"]
-        direction TB
-        A["<b>POST</b> /documents<br/><i>Create Document</i>"]
-        B["<b>PUT</b> /documents/{docId}<br/><i>Update Document</i>"]
-        C["<b>DELETE</b> /documents/{docId}<br/><i>Delete Document</i>"]
-
-        A -- "1. Validate Schema<br/>2. Check Permissions" --> E1(Endpoint Logic)
-        B -- "1. Validate Schema<br/>2. Check Permissions" --> E2(Endpoint Logic)
-        C -- "1. Validate Schema<br/>2. Check Permissions" --> E3(Endpoint Logic)
-    end
-
-    subgraph subGraph4["Workflow Layer (Temporal Python)"]
-        W(ManageDocument Workflow <br/> <b>Saga Coordinator</b>)
-        
-        subgraph "Step 1: Sequential"
-            D[Execute on Directus API]
-        end
-
-        subgraph "Step 2: Parallel"
-            E[Index on Qdrant API]
-            F[Index on Elasticsearch API]
-        end
-
-        sync_point((( )))
-        style sync_point fill:#fff,stroke:#fff
-        I{Job Succeeded}
-        J{Job Failed & Rolled Back}
-        
-        subgraph "Compensation Steps (on failure)"
-            direction TB
-            Compensate_Parallel["Compensate Parallel Steps<br/>(Qdrant & Elastic if they succeeded)"]
-            Compensate_Directus[Compensate Directus Change]
-            Compensate_Parallel --> Compensate_Directus
-        end
-
-        W --> D
-        D -- success --> E & F
-        D -- failure --> J
-        
-        E --> sync_point
-        F --> sync_point
-        
-        sync_point -- all success --> I
-        sync_point -- failure --> Compensate_Parallel
-        Compensate_Directus --> J
-    end
-
-    %% API → Workflow
-    E1 -- startWorkflow({type:'CREATE_DOC', collectionId, ...payload}) --> W
-    E2 -- startWorkflow({type:'UPDATE_DOC', collectionId, docId, ...payload}) --> W
-    E3 -- startWorkflow({type:'DELETE_DOC', collectionId, docId}) --> W
-
-    style I fill:#a5d6a7,stroke:#2e7d32
-    style J fill:#ef9a9a,stroke:#c62828`;
+      const ADV_SAMPLE = `
+      flowchart TD
+  A([Start]) --> B{Condition?}
+  B -- Yes --> C[Do something]
+  B -- No  --> D[Do otherwise]
+  C --> E([End])
+  D --> E([End])
+      `;
 
       // Samples will be added as initial projects, not buttons
 
