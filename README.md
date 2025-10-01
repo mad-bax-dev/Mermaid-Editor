@@ -1,4 +1,4 @@
-# Mermaid Editor (AI-assisted)
+# Mermaid Editor (AI)
 
 A lightweight, single-file, backend-free web editor for Mermaid diagrams with AI assistance.
 
